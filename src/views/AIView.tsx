@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Image as ImageIcon, X, AlertTriangle, Loader2, FileText, Menu, Plus, MessageSquare, MoreHorizontal, Bot, Trash2, ChevronRight, Mic } from 'lucide-react';
-import { Message } from '../types';
+import { Message } from '../src/types';
 import { sendMessageToAI, checkRisk } from '../services/geminiService';
 
 // Define Session Interface internally for View Logic

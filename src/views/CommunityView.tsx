@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Heart, Search, X, Image as ImageIcon, Check, ChevronLeft, ChevronRight, Plus, Camera, Trash2, CheckCircle2, MessageCircle, Share2, Star, Send, MoreHorizontal } from 'lucide-react';
-import { CommunityPost, Comment } from '../types';
+import { CommunityPost, Comment } from '../src/types';
 
 const MOCK_COMMENTS: Comment[] = [
     { 

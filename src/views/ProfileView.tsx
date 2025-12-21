@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { Settings, Bookmark, FileText, ChevronRight, PawPrint, LogOut, Wallet, X, Check, Camera, ChevronLeft, Plus, Trash2, Ruler, Calendar, MessageSquare, Heart, MessageCircle, Crown, Zap, ShieldCheck, Gem, Star, Footprints, Clock, Eye, Activity, Bell, Lock, Smartphone, Moon, Info, HelpCircle, Users, UserCheck, UserPlus, Smartphone as PhoneIcon, Key, History, Download, FileCheck } from 'lucide-react';
-import { PetProfile, CommunityPost } from '../types';
+import { PetProfile, CommunityPost } from '../src/types';
 
 // --- Types & Enums ---
 type ViewMode = 

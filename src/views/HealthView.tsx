@@ -3,7 +3,7 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer 
 } from 'recharts';
 import { FileText, Syringe, Ruler, Plus, ChevronRight, AlertCircle, Camera, X, Check, ChevronLeft, Sparkles, Building2, Calendar, ChevronDown, Clock, CheckCircle2, Upload, Trash2, File, Loader2, Pencil } from 'lucide-react';
-import { PetProfile, VaccineRecord, HealthRecord, MedicalRecord } from '../types';
+import { PetProfile, VaccineRecord, HealthRecord, MedicalRecord } from '../src/types';
 
 interface HealthViewProps {
   onToggleTabBar?: (visible: boolean) => void;

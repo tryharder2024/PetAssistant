@@ -1,5 +1,5 @@
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
-import { Message } from "../types";
+import { Message } from "../src/types";
 
 const RISK_KEYWORDS = ["呕吐", "便血", "抽搐", "吐血", "呼吸困难", "精神萎靡", "不吃不喝", "vomit", "blood", "seizure"];
 
