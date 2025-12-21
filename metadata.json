@@ -1,0 +1,8 @@
+{
+  "name": "宠医助手 (Pet Doctor Assistant)",
+  "description": "基于大模型的宠物智能健康管理与咨询平台 / AI-powered Pet Health Management & Consultation Platform",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
