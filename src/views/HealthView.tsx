@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer 
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area
 } from 'recharts';
-import { FileText, Syringe, Ruler, Plus, ChevronRight, AlertCircle, Camera, X, Check, ChevronLeft, Sparkles, Building2, Calendar, ChevronDown, Clock, CheckCircle2, Upload, Trash2, File, Loader2, Pencil } from 'lucide-react';
-import { PetProfile, VaccineRecord, HealthRecord, MedicalRecord } from '../src/types';
+import { FileText, Syringe, Ruler, Plus, ChevronRight, AlertCircle, Camera, X, Check, ChevronLeft, Sparkles, Building2, Calendar, ChevronDown, Clock, CheckCircle2, Upload, Trash2, File, Loader2, Pencil, History, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { PetProfile, VaccineRecord, HealthRecord, MedicalRecord } from '../types';
 
 interface HealthViewProps {
   onToggleTabBar?: (visible: boolean) => void;
@@ -40,6 +40,8 @@ const INITIAL_WEIGHT_DATA: HealthRecord[] = [
   { date: '2023-11-01', weight: 27.5 },
   { date: '2023-12-01', weight: 28.0 },
   { date: '2024-01-01', weight: 28.5 },
+  { date: '2024-02-01', weight: 28.2 },
+  { date: '2024-03-01', weight: 28.5 },
 ];
 
 const INITIAL_VACCINES: VaccineRecord[] = [
@@ -101,6 +103,8 @@ const HealthView: React.FC<HealthViewProps> = ({ onToggleTabBar }) => {
   // Weight Recording State
   const [weightData, setWeightData] = useState<HealthRecord[]>(INITIAL_WEIGHT_DATA);
   const [isAddingWeight, setIsAddingWeight] = useState(false);
+  const [showWeightHistory, setShowWeightHistory] = useState(false); // New state for history view
+  const [historyTimeRange, setHistoryTimeRange] = useState<'1M' | '3M' | '6M' | '1Y' | 'ALL'>('ALL');
   const [weightForm, setWeightForm] = useState({
     date: new Date().toISOString().split('T')[0],
     weight: ''
@@ -183,10 +187,22 @@ const HealthView: React.FC<HealthViewProps> = ({ onToggleTabBar }) => {
   };
 
   // --- Weight Logic ---
-  const handleAddWeightClick = () => {
+  const handleAddWeightClick = (e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent triggering other clicks
+    
+    // Auto-fill logic: Use the last recorded weight as default
+    let defaultWeight = '';
+    if (weightData.length > 0) {
+        // Assuming weightData is sorted by date ascending, take the last one
+        defaultWeight = weightData[weightData.length - 1].weight.toString();
+    } else {
+        // Fallback to current profile weight
+        defaultWeight = pet.weight.toString();
+    }
+
     setWeightForm({
       date: new Date().toISOString().split('T')[0],
-      weight: ''
+      weight: defaultWeight
     });
     setIsAddingWeight(true);
   };
@@ -200,8 +216,11 @@ const HealthView: React.FC<HealthViewProps> = ({ onToggleTabBar }) => {
     const newVal = parseFloat(weightForm.weight);
     
     // Update Chart Data
+    // We filter out any existing entry for the same date to allow "updates" for the same day
+    const otherRecords = weightData.filter(r => r.date !== weightForm.date);
     const newRecord = { date: weightForm.date, weight: newVal };
-    const updatedData = [...weightData, newRecord].sort((a, b) => 
+    
+    const updatedData = [...otherRecords, newRecord].sort((a, b) => 
       new Date(a.date).getTime() - new Date(b.date).getTime()
     );
     setWeightData(updatedData);
@@ -263,7 +282,7 @@ const HealthView: React.FC<HealthViewProps> = ({ onToggleTabBar }) => {
   const handleRecordFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files.length > 0) {
-        Array.from(files).forEach(file => {
+        Array.from(files).forEach((file: File) => {
             const reader = new FileReader();
             reader.onloadend = () => {
                 if (reader.result) {
@@ -316,7 +335,7 @@ const HealthView: React.FC<HealthViewProps> = ({ onToggleTabBar }) => {
   const handleEditRecordFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const files = e.target.files;
       if (files && files.length > 0 && editingRecordForm) {
-          Array.from(files).forEach(file => {
+          Array.from(files).forEach((file: File) => {
               const reader = new FileReader();
               reader.onloadend = () => {
                   if (reader.result) {
@@ -358,6 +377,153 @@ const HealthView: React.FC<HealthViewProps> = ({ onToggleTabBar }) => {
       setIsEditingRecord(false);
       setEditingRecordForm(null);
   };
+
+  // --- RENDER: WEIGHT HISTORY VIEW ---
+  if (showWeightHistory) {
+    // 1. Sort data
+    const sortedData = [...weightData].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    
+    // 2. Filter by Time Range
+    const now = new Date();
+    const filteredData = sortedData.filter(item => {
+        const itemDate = new Date(item.date);
+        if (historyTimeRange === 'ALL') return true;
+        
+        const cutoff = new Date();
+        if (historyTimeRange === '1M') cutoff.setMonth(now.getMonth() - 1);
+        if (historyTimeRange === '3M') cutoff.setMonth(now.getMonth() - 3);
+        if (historyTimeRange === '6M') cutoff.setMonth(now.getMonth() - 6);
+        if (historyTimeRange === '1Y') cutoff.setFullYear(now.getFullYear() - 1);
+        
+        return itemDate >= cutoff;
+    });
+
+    // 3. Stats Calculation
+    const currentWeight = filteredData.length > 0 ? filteredData[filteredData.length - 1].weight : 0;
+    const weights = filteredData.map(d => d.weight);
+    const maxWeight = weights.length > 0 ? Math.max(...weights) : 0;
+    const minWeight = weights.length > 0 ? Math.min(...weights) : 0;
+    
+    const startWeight = filteredData.length > 0 ? filteredData[0].weight : 0;
+    const diff = filteredData.length > 0 ? currentWeight - startWeight : 0;
+
+    return (
+      <div className="h-full flex flex-col bg-background animate-in slide-in-from-right duration-300">
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 pb-3 pt-14 border-b border-gray-100 shrink-0 bg-white sticky top-0 z-30">
+            <button onClick={() => setShowWeightHistory(false)} className="text-gray-600 p-2 -ml-2 hover:bg-gray-50 rounded-full transition">
+              <ChevronLeft size={24} />
+            </button>
+            <h2 className="font-bold text-lg text-gray-900">体重趋势</h2>
+            <button onClick={handleAddWeightClick} className="text-primary font-bold p-2 -mr-2 hover:bg-orange-50 rounded-full transition">
+              <Plus size={24} />
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-4 space-y-6">
+             {/* Stats Cards */}
+             <div className="grid grid-cols-3 gap-3">
+                <div className="bg-white p-4 rounded-2xl shadow-card flex flex-col items-center justify-center">
+                    <span className="text-xs text-gray-400 mb-1">当前 (kg)</span>
+                    <span className="text-2xl font-bold text-gray-900">{currentWeight}</span>
+                </div>
+                <div className="bg-white p-4 rounded-2xl shadow-card flex flex-col items-center justify-center">
+                    <span className="text-xs text-gray-400 mb-1">最高 (kg)</span>
+                    <span className="text-xl font-bold text-gray-900">{maxWeight}</span>
+                </div>
+                <div className="bg-white p-4 rounded-2xl shadow-card flex flex-col items-center justify-center">
+                    <span className="text-xs text-gray-400 mb-1">最低 (kg)</span>
+                    <span className="text-xl font-bold text-gray-900">{minWeight}</span>
+                </div>
+             </div>
+
+             {/* Main Chart Card */}
+             <div className="bg-white rounded-3xl p-5 shadow-card min-h-[380px] flex flex-col">
+                <div className="flex justify-between items-center mb-6">
+                    <div>
+                        <p className="text-xs text-gray-400 font-bold uppercase tracking-wider mb-0.5">区间变化</p>
+                        <div className={`flex items-center gap-1 text-lg font-bold ${diff > 0 ? 'text-red-500' : diff < 0 ? 'text-green-500' : 'text-gray-700'}`}>
+                            {diff > 0 ? '+' : ''}{diff.toFixed(1)} <span className="text-sm font-normal text-gray-400">kg</span>
+                        </div>
+                    </div>
+                    {/* Time Range Selector */}
+                    <div className="flex bg-gray-100 rounded-lg p-1 gap-1">
+                        {['1M', '3M', '6M', 'ALL'].map((range) => (
+                            <button
+                                key={range}
+                                onClick={() => setHistoryTimeRange(range as any)}
+                                className={`px-3 py-1 rounded-md text-[10px] font-bold transition-all ${
+                                    historyTimeRange === range 
+                                    ? 'bg-white text-gray-900 shadow-sm' 
+                                    : 'text-gray-400 hover:text-gray-600'
+                                }`}
+                            >
+                                {range === 'ALL' ? '全部' : range}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="flex-1 w-full min-h-[250px]">
+                    {filteredData.length > 0 ? (
+                        <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={filteredData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                <defs>
+                                    <linearGradient id="colorWeight" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#FF8853" stopOpacity={0.2}/>
+                                        <stop offset="95%" stopColor="#FF8853" stopOpacity={0}/>
+                                    </linearGradient>
+                                </defs>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f3f3" />
+                                <XAxis 
+                                    dataKey="date" 
+                                    axisLine={false} 
+                                    tickLine={false} 
+                                    tick={{fontSize: 10, fill: '#9CA3AF'}} 
+                                    tickFormatter={(val) => {
+                                        const d = new Date(val);
+                                        return `${d.getMonth()+1}/${d.getDate()}`;
+                                    }}
+                                    dy={10}
+                                    minTickGap={30}
+                                />
+                                <YAxis 
+                                    axisLine={false}
+                                    tickLine={false}
+                                    tick={{fontSize: 10, fill: '#9CA3AF'}}
+                                    domain={['dataMin - 1', 'dataMax + 1']} 
+                                />
+                                <Tooltip 
+                                    contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)', fontSize: '12px'}}
+                                    itemStyle={{color: '#FF8853', fontWeight: 'bold'}}
+                                    labelStyle={{color: '#9CA3AF', marginBottom: '4px'}}
+                                    labelFormatter={(label) => new Date(label).toLocaleDateString()}
+                                />
+                                <Area 
+                                    type="monotone" 
+                                    dataKey="weight" 
+                                    stroke="#FF8853" 
+                                    strokeWidth={3} 
+                                    fillOpacity={1} 
+                                    fill="url(#colorWeight)" 
+                                    dot={{fill: '#fff', strokeWidth: 2, r: 4, stroke: '#FF8853'}}
+                                    activeDot={{r: 6, fill: '#FF8853', stroke: '#fff', strokeWidth: 2}}
+                                    animationDuration={1000}
+                                />
+                            </AreaChart>
+                        </ResponsiveContainer>
+                    ) : (
+                        <div className="flex flex-col items-center justify-center h-full text-gray-300">
+                            <Ruler size={32} className="opacity-20 mb-2" />
+                            <p className="text-xs">该时间段暂无数据</p>
+                        </div>
+                    )}
+                </div>
+             </div>
+          </div>
+      </div>
+    );
+  }
 
   // --- RENDER: ADD RECORD VIEW (Full Page) ---
   if (isAddingRecord) {
@@ -930,11 +1096,15 @@ const HealthView: React.FC<HealthViewProps> = ({ onToggleTabBar }) => {
         {/* Weight Chart */}
         <div className="bg-white rounded-2xl p-5 shadow-card">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="font-bold text-gray-900 flex items-center gap-2 text-base">
-              <div className="p-1.5 bg-accent/20 rounded-lg text-yellow-600">
+            <h3 
+                onClick={() => setShowWeightHistory(true)}
+                className="font-bold text-gray-900 flex items-center gap-2 text-base cursor-pointer group"
+            >
+              <div className="p-1.5 bg-accent/20 rounded-lg text-yellow-600 group-hover:bg-accent/30 transition-colors">
                  <Ruler size={16} />
               </div> 
               体重记录
+              <ChevronRight size={16} className="text-gray-300 group-hover:text-gray-500 transition-colors" />
             </h3>
             <button 
                 onClick={handleAddWeightClick}

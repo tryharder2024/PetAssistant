@@ -74,7 +74,25 @@ export interface CommunityPost {
   tags: string[];
   // Social interactions
   isLiked?: boolean;
+  isFavorite?: boolean;
+  favorites?: number;
   isFollowing?: boolean;
   comments?: Comment[];
   createTime?: string;
+}
+
+export interface PetPhoto {
+  id: string;
+  url: string;
+  uploadTime: string;
+}
+
+// New Interface for Pet Space Albums
+export interface PetAlbum {
+  id: string;
+  title: string;
+  cover: string;
+  count: number;
+  createdAt: string;
+  photos: PetPhoto[]; // List of photo objects
 }

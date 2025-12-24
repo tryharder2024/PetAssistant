@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Image as ImageIcon, X, AlertTriangle, Loader2, FileText, Menu, Plus, MessageSquare, MoreHorizontal, Bot, Trash2, ChevronRight, Mic } from 'lucide-react';
-import { Message } from '../src/types';
+import { Send, Image as ImageIcon, X, AlertTriangle, Loader2, FileText, Menu, Plus, MessageSquare, MoreHorizontal, Bot, Trash2, ChevronRight, Mic, Save, Download } from 'lucide-react';
+import { Message } from '../types';
 import { sendMessageToAI, checkRisk } from '../services/geminiService';
 
 // Define Session Interface internally for View Logic
@@ -13,8 +13,13 @@ interface ChatSession {
 
 const AIView: React.FC = () => {
   // --- State Management ---
-  const [sessions, setSessions] = useState<ChatSession[]>([
-    {
+  // Load from local storage if available, else default
+  const [sessions, setSessions] = useState<ChatSession[]>(() => {
+    const saved = localStorage.getItem('pet_doctor_sessions');
+    if (saved) {
+      return JSON.parse(saved);
+    }
+    return [{
       id: 'default',
       title: '新对话',
       updatedAt: Date.now(),
@@ -26,11 +31,25 @@ const AIView: React.FC = () => {
           timestamp: Date.now()
         }
       ]
-    }
-  ]);
-  const [currentSessionId, setCurrentSessionId] = useState<string>('default');
+    }];
+  });
+
+  const [currentSessionId, setCurrentSessionId] = useState<string>(() => {
+     // Default to the first session id
+     const saved = localStorage.getItem('pet_doctor_sessions');
+     if(saved) {
+        const parsed = JSON.parse(saved);
+        return parsed[0]?.id || 'default';
+     }
+     return 'default';
+  });
+
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   
+  // Save Dialog State
+  const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
+  const [saveTitle, setSaveTitle] = useState('');
+
   const [inputText, setInputText] = useState('');
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -45,6 +64,11 @@ const AIView: React.FC = () => {
   const messages = currentSession.messages;
 
   // --- Effects ---
+  // Persist sessions to Local Storage whenever they change
+  useEffect(() => {
+    localStorage.setItem('pet_doctor_sessions', JSON.stringify(sessions));
+  }, [sessions]);
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -78,13 +102,49 @@ const AIView: React.FC = () => {
     const newSessions = sessions.filter(s => s.id !== id);
     setSessions(newSessions);
     if (currentSessionId === id) {
-      // If we deleted the active one, switch to the first available or create new
       if (newSessions.length > 0) {
         setCurrentSessionId(newSessions[0].id);
       } else {
-        handleCreateNewSession();
+        // If all deleted, recreate a default one
+        const defaultSession: ChatSession = {
+            id: 'default-' + Date.now(),
+            title: '新对话',
+            updatedAt: Date.now(),
+            messages: []
+        };
+        setSessions([defaultSession]);
+        setCurrentSessionId(defaultSession.id);
       }
     }
+  };
+
+  // --- Save & Export Logic ---
+  const handleOpenSaveDialog = () => {
+    setSaveTitle(currentSession.title === '新对话' ? '' : currentSession.title);
+    setIsSaveDialogOpen(true);
+  };
+
+  const handleSaveTitle = () => {
+    if(!saveTitle.trim()) return;
+    setSessions(prev => prev.map(s => 
+        s.id === currentSessionId ? { ...s, title: saveTitle } : s
+    ));
+    setIsSaveDialogOpen(false);
+  };
+
+  const handleExportTxt = () => {
+      const content = currentSession.messages.map(m => 
+        `[${new Date(m.timestamp).toLocaleString()}] ${m.role === 'user' ? '我' : '宠医助手'}:\n${m.content}\n`
+      ).join('\n-------------------\n');
+      
+      const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${currentSession.title || '问诊记录'}_${new Date().toISOString().slice(0,10)}.txt`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -99,7 +159,6 @@ const AIView: React.FC = () => {
   };
 
   const handleVoiceInput = () => {
-    // If already listening, stop it
     if (isListening) {
       if (recognitionRef.current) {
         recognitionRef.current.stop();
@@ -108,7 +167,6 @@ const AIView: React.FC = () => {
       return;
     }
 
-    // Check browser support
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
       alert("抱歉，您的浏览器不支持语音输入功能。");
@@ -116,8 +174,8 @@ const AIView: React.FC = () => {
     }
 
     const recognition = new SpeechRecognition();
-    recognition.lang = 'zh-CN'; // Set language to Chinese
-    recognition.continuous = false; // Stop after one sentence for simplicity
+    recognition.lang = 'zh-CN';
+    recognition.continuous = false;
     recognition.interimResults = false;
 
     recognition.onstart = () => {
@@ -131,7 +189,6 @@ const AIView: React.FC = () => {
     recognition.onresult = (event: any) => {
       const transcript = event.results[0][0].transcript;
       if (transcript) {
-        // Append to existing text
         setInputText((prev) => prev + transcript);
       }
     };
@@ -139,9 +196,6 @@ const AIView: React.FC = () => {
     recognition.onerror = (event: any) => {
       console.error("Speech recognition error", event.error);
       setIsListening(false);
-      if (event.error === 'not-allowed') {
-        alert("请允许麦克风权限以使用语音输入。");
-      }
     };
 
     recognitionRef.current = recognition;
@@ -160,12 +214,12 @@ const AIView: React.FC = () => {
       timestamp: Date.now()
     };
 
-    // Optimistic Update: Add user message to current session
     setSessions(prev => prev.map(s => {
       if (s.id === currentSessionId) {
-        // Update Title if it's the first user message and title is default
         const isFirstUserMsg = s.messages.filter(m => m.role === 'user').length === 0;
-        const newTitle = (isFirstUserMsg && inputText) ? inputText.slice(0, 12) + (inputText.length > 12 ? '...' : '') : s.title;
+        const newTitle = (isFirstUserMsg && inputText && s.title === '新对话') 
+          ? inputText.slice(0, 12) + (inputText.length > 12 ? '...' : '') 
+          : s.title;
         
         return {
           ...s,
@@ -181,23 +235,24 @@ const AIView: React.FC = () => {
     setSelectedImage(null);
     setIsLoading(true);
 
-    // Call API (Using the messages from the specific session context would be better, 
-    // but here we pass the updated local list we just created effectively)
-    // Note: sendMessageToAI expects history. We construct it from current messages + new one.
     const currentHistory = [...messages, newUserMsg];
     
-    const responseText = await sendMessageToAI(newUserMsg.content, newUserMsg.image || null, currentHistory);
-    const isRisk = checkRisk(responseText) || checkRisk(newUserMsg.content);
+    // Call API
+    const rawResponseText = await sendMessageToAI(newUserMsg.content, newUserMsg.image || null, currentHistory);
+    
+    // Check for risk tag generated by AI
+    const isRisk = checkRisk(rawResponseText);
+    // Remove the tag from the display text
+    const cleanResponseText = rawResponseText.replace("[RISK_DETECTED]", "").trim();
 
     const newAiMsg: Message = {
       id: (Date.now() + 1).toString(),
       role: 'model',
-      content: responseText,
+      content: cleanResponseText,
       isRisk: isRisk,
       timestamp: Date.now()
     };
 
-    // Update with AI response
     setSessions(prev => prev.map(s => {
       if (s.id === currentSessionId) {
         return {
@@ -212,25 +267,15 @@ const AIView: React.FC = () => {
     setIsLoading(false);
   };
 
-  const formatRiskText = (text: string) => {
-    const riskPattern = /(呕吐|便血|抽搐|吐血|呼吸困难|精神萎靡|不吃不喝)/g;
-    const parts = text.split(riskPattern);
-    return parts.map((part, index) => 
-      riskPattern.test(part) ? <span key={index} className="text-red-600 font-bold bg-red-50 px-1 rounded">{part}</span> : part
-    );
-  };
-
   return (
     <div className="flex flex-col h-full bg-background relative overflow-hidden">
       
       {/* --- Sidebar (History) --- */}
-      {/* Overlay */}
       <div 
         className={`absolute inset-0 bg-black/40 z-40 transition-opacity duration-300 ${isSidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
         onClick={() => setIsSidebarOpen(false)}
       />
       
-      {/* Drawer Panel */}
       <div className={`absolute top-0 bottom-0 left-0 w-[75%] bg-white z-50 shadow-2xl transition-transform duration-300 transform flex flex-col ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="p-6 bg-primary/5 pt-16 pb-6">
             <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
@@ -261,10 +306,9 @@ const AIView: React.FC = () => {
                            {new Date(session.updatedAt).toLocaleDateString()}
                         </p>
                     </div>
-                    {/* Delete Button (Visible on hover or active) */}
                     <button 
                         onClick={(e) => handleDeleteSession(e, session.id)}
-                        className={`p-1.5 rounded-full text-gray-400 hover:text-red-500 hover:bg-red-50 transition opacity-0 group-hover:opacity-100 ${sessions.length <= 1 ? 'hidden' : ''}`}
+                        className={`p-1.5 rounded-full text-gray-400 hover:text-red-500 hover:bg-red-50 transition opacity-0 group-hover:opacity-100`}
                     >
                         <Trash2 size={14} />
                     </button>
@@ -281,7 +325,6 @@ const AIView: React.FC = () => {
             </button>
         </div>
       </div>
-
 
       {/* --- Main Chat Header --- */}
       <div className="bg-white/95 backdrop-blur-md px-4 pt-14 pb-3 border-b border-gray-100 shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex items-center justify-between sticky top-0 z-30">
@@ -303,19 +346,17 @@ const AIView: React.FC = () => {
             </div>
         </div>
 
-        <button 
-            onClick={handleCreateNewSession}
-            className="p-2 -mr-2 text-gray-600 hover:bg-gray-50 rounded-full transition active:scale-90"
-        >
-            <Plus size={24} />
-        </button>
+        <div className="flex items-center">
+            <button 
+                onClick={handleOpenSaveDialog}
+                className="p-2 text-gray-600 hover:bg-gray-50 rounded-full transition active:scale-90"
+            >
+                <Save size={24} />
+            </button>
+        </div>
       </div>
 
       {/* --- Messages Area --- */}
-      {/* 
-         NOTE: pb-[160px] is crucial here. 
-         84px (TabBar) + ~60px (InputArea) + ~16px (Padding) = ~160px space reserved at bottom 
-      */}
       <div className="flex-1 overflow-y-auto p-4 space-y-6 pb-[160px]">
         {messages.length === 0 && (
              <div className="flex flex-col items-center justify-center mt-20 opacity-50">
@@ -349,7 +390,7 @@ const AIView: React.FC = () => {
                     : 'bg-white text-gray-800 rounded-bl-none shadow-soft border border-white/50'
                   }`}
               >
-                {/* Risk Warning Badge */}
+                {/* Risk Warning Badge - Only shows if AI explicitly tagged it as risk */}
                 {msg.isRisk && msg.role === 'model' && (
                   <div className="mb-3 bg-red-50 border border-red-100 rounded-xl p-3 flex items-start gap-2.5">
                     <AlertTriangle className="text-red-500 shrink-0 mt-0.5" size={18} />
@@ -366,8 +407,9 @@ const AIView: React.FC = () => {
                   </div>
                 )}
                 
-                <div className="whitespace-pre-wrap">
-                    {msg.role === 'model' ? formatRiskText(msg.content) : msg.content}
+                {/* Plain Text Display - No formatRiskText, No Markdown parsing artifacts */}
+                <div className="whitespace-pre-wrap font-sans">
+                    {msg.content}
                 </div>
               </div>
             </div>
@@ -385,10 +427,6 @@ const AIView: React.FC = () => {
       </div>
 
       {/* --- Input Area --- */}
-      {/* 
-         NOTE: bottom-[84px] lifts the input area above the TabBar (which is ~84px high).
-         Added shadow for better separation.
-      */}
       <div className="absolute bottom-[84px] w-full bg-white/95 backdrop-blur-xl border-t border-gray-100 p-3 z-30 shadow-[0_-4px_20px_rgba(0,0,0,0.02)]">
         {selectedImage && (
           <div className="mb-3 ml-1 relative inline-block animate-in slide-in-from-bottom-2 fade-in duration-200">
@@ -433,7 +471,6 @@ const AIView: React.FC = () => {
               className="w-full bg-transparent border-none outline-none text-[15px] text-gray-900 placeholder-gray-400 resize-none no-scrollbar"
               style={{ minHeight: '24px' }}
             />
-             {/* Microphone Button */}
              <button 
                 onClick={handleVoiceInput}
                 className={`p-1.5 ml-1 rounded-full transition-all shrink-0 active:scale-90 ${
@@ -461,6 +498,48 @@ const AIView: React.FC = () => {
           </button>
         </div>
       </div>
+
+       {/* Save Dialog Modal */}
+       {isSaveDialogOpen && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in">
+           <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden p-6 animate-in zoom-in-95 duration-200">
+               <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-bold text-gray-900">保存对话</h3>
+                  <button onClick={() => setIsSaveDialogOpen(false)} className="text-gray-400 hover:bg-gray-50 p-1 rounded-full">
+                      <X size={20} />
+                  </button>
+               </div>
+               
+               <div className="space-y-4">
+                   <div>
+                       <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5 block">对话标题</label>
+                       <input 
+                          type="text" 
+                          value={saveTitle} 
+                          onChange={(e) => setSaveTitle(e.target.value)}
+                          placeholder="例如：狗狗呕吐咨询..."
+                          className="w-full p-3 bg-gray-50 rounded-xl outline-none focus:ring-2 focus:ring-primary/20 transition text-gray-900"
+                       />
+                   </div>
+
+                   <button 
+                      onClick={handleExportTxt}
+                      className="w-full flex items-center justify-center gap-2 py-3 border border-gray-200 rounded-xl text-gray-600 font-medium hover:bg-gray-50 transition"
+                   >
+                      <Download size={18} /> 导出为文本
+                   </button>
+                   
+                   <button 
+                      onClick={handleSaveTitle}
+                      className="w-full bg-primary text-white py-3 rounded-xl font-bold shadow-lg shadow-primary/30 active:scale-95 transition-transform"
+                   >
+                      保存更改
+                   </button>
+               </div>
+           </div>
+        </div>
+      )}
+
     </div>
   );
 };

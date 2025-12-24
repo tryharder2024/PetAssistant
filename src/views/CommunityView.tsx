@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Heart, Search, X, Image as ImageIcon, Check, ChevronLeft, ChevronRight, Plus, Camera, Trash2, CheckCircle2, MessageCircle, Share2, Star, Send, MoreHorizontal } from 'lucide-react';
-import { CommunityPost, Comment } from '../src/types';
+import { CommunityPost, Comment } from '../types';
 
 const MOCK_COMMENTS: Comment[] = [
     { 
@@ -49,6 +49,8 @@ const MOCK_POSTS: CommunityPost[] = [
     likes: 124,
     tags: ['#金毛', '#新手养狗', '#换牙期'],
     isLiked: false,
+    isFavorite: false,
+    favorites: 56,
     isFollowing: false,
     comments: MOCK_COMMENTS,
     createTime: '2小时前'
@@ -64,6 +66,8 @@ const MOCK_POSTS: CommunityPost[] = [
     likes: 45,
     tags: ['#生病求助', '#猫咪健康'],
     isLiked: false,
+    isFavorite: false,
+    favorites: 12,
     isFollowing: true,
     comments: [],
     createTime: '5小时前'
@@ -79,6 +83,8 @@ const MOCK_POSTS: CommunityPost[] = [
     likes: 231,
     tags: ['#柯基', '#遛狗'],
     isLiked: true,
+    isFavorite: true,
+    favorites: 189,
     isFollowing: false,
     comments: [],
     createTime: '1天前'
@@ -94,6 +100,8 @@ const MOCK_POSTS: CommunityPost[] = [
     likes: 89,
     tags: ['#布偶猫', '#好物分享'],
     isLiked: false,
+    isFavorite: false,
+    favorites: 34,
     isFollowing: false,
     comments: [],
     createTime: '2天前'
@@ -145,7 +153,7 @@ const CommunityView: React.FC = () => {
       const newImages: string[] = [];
       let processedCount = 0;
 
-      Array.from(files).forEach(file => {
+      Array.from(files).forEach((file: File) => {
         const reader = new FileReader();
         reader.onloadend = () => {
           if (reader.result) {
@@ -214,6 +222,8 @@ const CommunityView: React.FC = () => {
       likes: 0,
       tags: newPost.tags.length > 0 ? newPost.tags : ['#日常'],
       isLiked: false,
+      isFavorite: false,
+      favorites: 0,
       isFollowing: false,
       comments: [],
       createTime: '刚刚'
@@ -305,6 +315,28 @@ const CommunityView: React.FC = () => {
       setPosts(prev => prev.map(p => 
           p.id === selectedPost.id 
             ? { ...p, isLiked: !isCurrentlyLiked, likes: newLikeCount } 
+            : p
+      ));
+  };
+
+  const handleFavorite = () => {
+      if (!selectedPost) return;
+      const isCurrentlyFavorited = selectedPost.isFavorite;
+      const currentFavCount = selectedPost.favorites || 0;
+      // Prevent negative count if data is inconsistent
+      const newFavCount = isCurrentlyFavorited ? Math.max(0, currentFavCount - 1) : currentFavCount + 1;
+
+      // Update local selected post
+      setSelectedPost({
+          ...selectedPost,
+          isFavorite: !isCurrentlyFavorited,
+          favorites: newFavCount
+      });
+
+      // Update main list
+      setPosts(prev => prev.map(p => 
+          p.id === selectedPost.id 
+            ? { ...p, isFavorite: !isCurrentlyFavorited, favorites: newFavCount } 
             : p
       ));
   };
@@ -613,9 +645,15 @@ const CommunityView: React.FC = () => {
                             </button>
 
                             {/* Favorite */}
-                            <button className="flex items-center gap-1 active:scale-90 transition-transform">
-                                <Star size={22} className="text-stone-600 hover:text-yellow-400 transition-colors" />
-                                <span className="text-sm font-medium text-stone-500">1</span>
+                            <button 
+                                onClick={handleFavorite}
+                                className="flex items-center gap-1 active:scale-90 transition-transform"
+                            >
+                                <Star 
+                                    size={22} 
+                                    className={`transition-colors ${selectedPost.isFavorite ? 'fill-yellow-400 text-yellow-400' : 'text-stone-600 hover:text-yellow-400'}`} 
+                                />
+                                <span className="text-sm font-medium text-stone-500">{selectedPost.favorites || 0}</span>
                             </button>
 
                             {/* Comment */}
